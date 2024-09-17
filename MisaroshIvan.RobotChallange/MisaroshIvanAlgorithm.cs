@@ -14,6 +14,8 @@ namespace MisaroshIvan.RobotChallange
             Logger.OnLogRound += Logger_OnLogRound;
         }
 
+        public List<Robot.Common.Robot> myRobots = new List<Robot.Common.Robot>();
+
         private void Logger_OnLogRound(object sender, LogRoundEventArgs e)
         {
             RoundCount++;
@@ -25,9 +27,12 @@ namespace MisaroshIvan.RobotChallange
         }
 
         public int RoundCount { get; set; }
+
+        public string Description => throw new NotImplementedException();
+
         private const int CollectRadius = 2;
 
-        public Position FindNearestFreeStation(Robot.Common.Robot movingRobot, Map map, IList<Robot.Common.Robot> robots)
+        public EnergyStation FindNearestFreeStation(Robot.Common.Robot movingRobot, Map map, IList<Robot.Common.Robot> robots)
         {
             EnergyStation nearest = null;
             int minDistance = int.MaxValue;
@@ -43,7 +48,7 @@ namespace MisaroshIvan.RobotChallange
                     }
                 }
             }
-            return nearest == null ? null : nearest.Position;
+            return nearest == null ? null : nearest;
         }
         public bool IsStationFree(EnergyStation station, Robot.Common.Robot movingRobot,
         IList<Robot.Common.Robot> robots)
@@ -53,86 +58,287 @@ namespace MisaroshIvan.RobotChallange
 
         public bool IsCellFree(Position cell, Robot.Common.Robot movingRobot, IList<Robot.Common.Robot> robots)
         {
-            // Define the radius within which we want to check for other robots
-            const int radius = 2;
-
-            // Iterate over all positions within the 2-block radius around the target cell
-            for (int x = cell.X - radius; x <= cell.X + radius; x++)
+            foreach (var robot in robots)
             {
-                for (int y = cell.Y - radius; y <= cell.Y + radius; y++)
+                if (robot != movingRobot)
                 {
-                    // Make sure we are still within the boundaries of the map
-                    if (x >= 0 && y >= 0 && x < 100 && y < 100)  // Assuming the map is 100x100
-                    {
-                        Position checkPos = new Position(x, y);
+                    if (robot.Position == cell)
+                        return false;
+                }
+            }
+            return true;
+        }
 
-                        // Check if any robot occupies this cell within the radius
+        public IList<Robot.Common.Robot> CheckCellsInRadius(Position pos, int radius, IList<Robot.Common.Robot> robots)
+        {
+            IList<Robot.Common.Robot> robotsInRadius = new List<Robot.Common.Robot>();
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                for (int dy = -radius; dy <= radius; dy++)
+                {
+                    int newX = pos.X + dx;
+                    int newY = pos.Y + dy;
+
+                    // Check if the new position is within the grid bounds
+                    if (newX >= 0 && newY >= 0 && newX < 100 && newY < 100)
+                    {
                         foreach (var robot in robots)
                         {
-                            if (robot != movingRobot && robot.Position == checkPos)
+                            if (robot.Position.X == newX && robot.Position.Y == newY)
                             {
-                                return false;
+                                robotsInRadius.Add(robot);
                             }
                         }
                     }
                 }
             }
-
-            // If no robot was found in the 2-block radius, return true
-            return true;
+            return robotsInRadius;
         }
 
-        public Position GetAcceptableNewPos(Position stationPos, Robot.Common.Robot movingRobot, IList<Robot.Common.Robot> robots)
+        public bool IsMyRobot(Robot.Common.Robot robot)
         {
-            /* TODO: modify to account for competitors (to spedup in case someone trying to steal resources)*/
-            int distance = DistanceHelper.GetDistance(movingRobot.Position, stationPos);
-            int robotEnergy = movingRobot.Energy;
-
-            if (distance > robotEnergy)
+            foreach (var r in myRobots)
             {
-                return null;
+                if (r == robot)
+                {
+                    return true;
+                }
             }
-
-
-            /*Account for collecting radius (2)*/
-            Position nextP = new Position() { X = movingRobot.Position.X, Y = movingRobot.Position.Y };
-            int deltaX = stationPos.X - movingRobot.Position.X;
-            int deltaY = stationPos.Y - movingRobot.Position.Y;
-
-            if (deltaX != 0)
-            {
-                nextP.X += deltaX > 0 ? 1 : -1; // Move right if deltaX > 0, left if deltaX < 0
-            }
-            
-            if (deltaY != 0)
-            {
-                nextP.Y += deltaY > 0 ? 1 : -1; // Move down if deltaY > 0, up if deltaY < 0
-            }
-
-            return nextP;
+            return false;
         }
+
+        public bool AnyAllyRobotInList(IList<Robot.Common.Robot> robots, Robot.Common.Robot movingRobot)
+        {
+            foreach (var robot in robots)
+            {
+                if (movingRobot != robot && IsMyRobot(robot))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static int MoveCost(Position pos, Position newPos)
+        {
+            return (int)Math.Abs(Math.Pow((newPos.X - pos.X), 2) + Math.Abs(Math.Pow((newPos.Y - pos.Y), 2)));
+        }
+
+        public static int MoveCostS(Robot.Common.Robot robot, EnergyStation station, int maxSteps = 2)
+        {
+            int currentSteps = 1;
+            int currentCost = MoveCost(robot.Position, station.Position);
+
+            while (currentSteps <= maxSteps)
+            {
+
+                int stepLeght = DistanceHelper.GetStepLength(robot.Position, station.Position, currentSteps);
+                int newCost = stepLeght * stepLeght;
+                if (newCost <= robot.Energy)
+                {
+                    return newCost;
+                }
+                currentSteps++;
+            }
+            return currentCost;
+        }
+
+        public Position CheckForViableTarget(Robot.Common.Robot movingRobot, IList<Robot.Common.Robot> robots)
+        {
+            robots = robots.Where(r => MoveCost(movingRobot.Position, r.Position) <= movingRobot.Energy).ToList();
+            int currentReward = 0;
+            Position target = null;
+            foreach (var robot in robots)
+            {
+                if (robot != movingRobot && !IsMyRobot(robot))
+                {
+                    int moveCost = MoveCost(movingRobot.Position, robot.Position) + 30;
+
+                    if (moveCost > movingRobot.Energy)
+                    {
+                        continue;
+                    }
+
+                    int newReward = (int)((robot.Energy * 0.05) - moveCost);
+                    if (currentReward < newReward)
+                    {
+                        currentReward = newReward;
+                        target = robot.Position;
+                    }
+                }
+            }
+            return target;
+        }
+
+        public static int GetAcceptableStepLenght(Robot.Common.Robot movingRobot, EnergyStation station)
+        {
+            int stepLenght = DistanceHelper.GetDistance(movingRobot.Position, station.Position);
+            int stepsNum = 1;
+            int moveCost = MoveCost(movingRobot.Position, station.Position);
+            while (stepsNum * moveCost > movingRobot.Energy)
+            {
+                stepsNum++;
+                stepLenght = DistanceHelper.GetStepLength(movingRobot.Position, station.Position, stepsNum); 
+                moveCost = stepLenght * stepLenght;
+            }
+            return stepLenght;
+
+        }
+
+        public static Position MoveByStepLenght(Robot.Common.Robot movingRobot, EnergyStation station, int stepLenght)
+        {
+            int dx = station.Position.X - movingRobot.Position.X;
+            int dy = station.Position.Y - movingRobot.Position.Y;
+            int absDx = Math.Abs(dx);
+            int absDy = Math.Abs(dy);
+            int newX = movingRobot.Position.X;
+            int newY = movingRobot.Position.Y;
+            if (absDx > absDy)
+            {
+                stepLenght = Math.Min(stepLenght, absDx);
+                if (dx > 0)
+                {
+                    newX += stepLenght;
+                }
+                else
+                {
+                    newX -= stepLenght;
+                }
+            }
+            else
+            {
+                stepLenght = Math.Min(stepLenght, absDy);
+                if (dy > 0)
+                {
+                    newY += stepLenght;
+                }
+                else
+                {
+                    newY -= stepLenght;
+                }
+            }
+            return new Position(newX, newY);
+        }
+
+        public static Move FindOptimalMove(Robot.Common.Robot movingRobot, EnergyStation station, int maxSteps = 2)
+        {
+            int currentSteps = 1;
+            int currentCost = MoveCost(movingRobot.Position, station.Position);
+            int currenStepLenght = DistanceHelper.GetStepLength(movingRobot.Position, station.Position, currentSteps);
+            float optimalRewardImprovement = 1.5f;
+
+            while (currentSteps <= maxSteps)
+            {
+                int newStepLenght = DistanceHelper.GetStepLength(movingRobot.Position, station.Position, currentSteps);
+                int newCost = newStepLenght * newStepLenght;
+                if (newCost > movingRobot.Energy)
+                {
+                    currentSteps++;
+                    continue;
+                }
+                if ((newCost / currentCost) >= optimalRewardImprovement)
+                {
+                    currentCost = newCost;
+                    currenStepLenght = newStepLenght;
+                }
+                currentSteps++;
+            }
+            return new Move(currentCost, currenStepLenght);
+        }
+
+        public EnergyStation FindBestStation(IList<Robot.Common.Robot> robots, Robot.Common.Robot movingRobot, Map map)
+        {
+            IList<EnergyStation> stations = map.Stations.Where(station => MoveCostS(movingRobot, station) <= movingRobot.Energy).ToList();
+            //IList<EnergyStation> stations = map.Stations.Where(station => MoveCost(movingRobot.Position, station.Position) <= movingRobot.Energy).ToList();
+            int currentReward = 0;
+            EnergyStation target = null;
+            foreach (var station in stations)
+            {
+                if (AnyAllyRobotInList(CheckCellsInRadius(station.Position, 2, robots), movingRobot))
+                {
+                    continue;
+                }
+                int moveCost = MoveCost(movingRobot.Position, station.Position);
+                if (moveCost > movingRobot.Energy)
+                {
+                    continue;
+                }
+                int newReward = (int)(station.Energy - moveCost);
+                if (currentReward < newReward)
+                {
+                    currentReward = newReward;
+                    target = station;
+                }
+            }
+            return target;
+        }
+
+        public Position CalculateMove(IList<Robot.Common.Robot> robots, Robot.Common.Robot movingRobot, Map map)
+        {
+            Position newPos = null;
+            EnergyStation bestStation = FindBestStation(robots, movingRobot, map);
+            if (bestStation == null)
+            {
+                return movingRobot.Position;
+            }
+
+            if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius && bestStation.Energy < 30))
+            {
+                newPos = CheckForViableTarget(movingRobot, robots);
+                if (newPos != null)
+                {
+                    return newPos;
+                }
+                //TODO: подумати як обрати іншу станцію
+
+            }
+
+            Move move = FindOptimalMove(movingRobot, bestStation);
+            //TODO: подумати як обрати іншу станцію
+
+            // TODO: find optimal distance to move
+            if (move.moveCost > movingRobot.Energy)
+            {
+                //return MoveByStepLenght(movingRobot, bestStation, GetAcceptableStepLenght(movingRobot, bestStation));
+                return MoveByStepLenght(movingRobot, bestStation, move.stepLenght);
+            }
+
+            if (move.moveCost < movingRobot.Energy)
+            {
+                return bestStation.Position;
+            }
+
+            return newPos;
+        }
+
 
         public RobotCommand DoStep(IList<Robot.Common.Robot> robots, int robotToMoveIndex, Map map)
         {
             Robot.Common.Robot movingRobot = robots[robotToMoveIndex];
+            updateRobots(movingRobot);
             
             if ((movingRobot.Energy > 500) && (robots.Count < map.Stations.Count) && this.RoundCount < 35)
             {
                 return new CreateNewRobotCommand();
             }
 
-            Position stationPosition = FindNearestFreeStation(robots[robotToMoveIndex], map, robots);
+            Position newPos = CalculateMove(robots, movingRobot, map);
         
-            if (stationPosition == null)
-                return null;
-            if (stationPosition == movingRobot.Position)
-                return new CollectEnergyCommand();
-            else
+
+            return new MoveCommand() { NewPosition = newPos};
+            
+        }
+
+        public void updateRobots(Robot.Common.Robot robot)
+        {
+            foreach (var r in myRobots)
             {
-                Position newPos = GetAcceptableNewPos(stationPosition, movingRobot, robots);
-                newPos = GetAcceptableNewPos(stationPosition, movingRobot, robots) == null ? movingRobot.Position : newPos;
-                return new MoveCommand() { NewPosition = newPos };
+                if (r == robot)
+                {
+                    return;
+                }
             }
+            myRobots.Add(robot);
         }
     }
 }

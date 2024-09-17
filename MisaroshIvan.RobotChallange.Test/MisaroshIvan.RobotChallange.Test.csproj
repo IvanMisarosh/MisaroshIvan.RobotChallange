@@ -54,6 +54,9 @@
   <ItemGroup>
     <Compile Include="TestDistanceHelper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TestFreeStation.cs" />
+    <Compile Include="TestMoves.cs" />
+    <Compile Include="TestRobotCounting.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

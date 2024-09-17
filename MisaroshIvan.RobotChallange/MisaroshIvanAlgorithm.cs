@@ -273,13 +273,28 @@ namespace MisaroshIvan.RobotChallange
             return target;
         }
 
-        public Position CalculateMove(IList<Robot.Common.Robot> robots, Robot.Common.Robot movingRobot, Map map)
+        // TODO: Move in collect energy radius instead of moving to the stations position directrly to save energy
+        // TODO: think of a way to exploit clusters of energy stations
+        public RobotCommand DoStep(IList<Robot.Common.Robot> robots, int robotToMoveIndex, Map map)
         {
+            Robot.Common.Robot movingRobot = robots[robotToMoveIndex];
+            updateRobots(movingRobot);
+            
+            if ((movingRobot.Energy > 500) && (robots.Count < map.Stations.Count) && this.RoundCount < 35)
+            {
+                return new CreateNewRobotCommand();
+            }
+
             Position newPos = null;
             EnergyStation bestStation = FindBestStation(robots, movingRobot, map);
             if (bestStation == null)
             {
-                return movingRobot.Position;
+                return new MoveCommand() { NewPosition = movingRobot.Position };
+            }
+
+            if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius))
+            {
+                return new CollectEnergyCommand();
             }
 
             if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius && bestStation.Energy < 30))
@@ -287,7 +302,7 @@ namespace MisaroshIvan.RobotChallange
                 newPos = CheckForViableTarget(movingRobot, robots);
                 if (newPos != null)
                 {
-                    return newPos;
+                    return new MoveCommand() { NewPosition = newPos };
                 }
                 //TODO: подумати як обрати іншу станцію
 
@@ -300,30 +315,14 @@ namespace MisaroshIvan.RobotChallange
             if (move.moveCost > movingRobot.Energy)
             {
                 //return MoveByStepLenght(movingRobot, bestStation, GetAcceptableStepLenght(movingRobot, bestStation));
-                return MoveByStepLenght(movingRobot, bestStation, move.stepLenght);
+                return new MoveCommand() { NewPosition = MoveByStepLenght(movingRobot, bestStation, move.stepLenght) };
             }
 
             if (move.moveCost < movingRobot.Energy)
             {
-                return bestStation.Position;
+                return new MoveCommand() { NewPosition = bestStation.Position };
             }
 
-            return newPos;
-        }
-
-
-        public RobotCommand DoStep(IList<Robot.Common.Robot> robots, int robotToMoveIndex, Map map)
-        {
-            Robot.Common.Robot movingRobot = robots[robotToMoveIndex];
-            updateRobots(movingRobot);
-            
-            if ((movingRobot.Energy > 500) && (robots.Count < map.Stations.Count) && this.RoundCount < 35)
-            {
-                return new CreateNewRobotCommand();
-            }
-
-            Position newPos = CalculateMove(robots, movingRobot, map);
-        
 
             return new MoveCommand() { NewPosition = newPos};
             

@@ -9,12 +9,12 @@ namespace MisaroshIvan.RobotChallange
     public class Move
     {
         public int moveCost { get; set; }
-        public int stepLenght { get; set; }
+        public int stepLength { get; set; }
         public int potentialReward { get; set; }
-        public Move(int moveCost, int stepLenght, int potentialReward)
+        public Move(int moveCost, int stepLength, int potentialReward)
         {
             this.moveCost = moveCost;
-            this.stepLenght = stepLenght;
+            this.stepLength = stepLength;
             this.potentialReward = potentialReward;
         }
     }

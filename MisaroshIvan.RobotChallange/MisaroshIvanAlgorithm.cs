@@ -185,7 +185,7 @@ namespace MisaroshIvan.RobotChallange
 
         }
 
-        public static Position MoveByStepLenght(Robot.Common.Robot movingRobot, EnergyStation station, int stepLenght)
+        public static Position MoveByStepLength(Robot.Common.Robot movingRobot, EnergyStation station, int stepLenght)
         {
             int dx = station.Position.X - movingRobot.Position.X;
             int dy = station.Position.Y - movingRobot.Position.Y;
@@ -280,56 +280,71 @@ namespace MisaroshIvan.RobotChallange
         public RobotCommand DoStep(IList<Robot.Common.Robot> robots, int robotToMoveIndex, Map map)
         {
             Robot.Common.Robot movingRobot = robots[robotToMoveIndex];
-            updateRobots(movingRobot);
-            
-            if ((movingRobot.Energy > 500) && (robots.Count < map.Stations.Count) && this.RoundCount < 35)
+            UpdateRobots(movingRobot);
+
+            if (ShouldCreateNewRobot(movingRobot, robots, map))
             {
-                return new CreateNewRobotCommand();
+                return new CreateNewRobotCommand() { NewRobotEnergy = 200};
             }
 
             EnergyStation bestStation = FindBestStation(robots, movingRobot, map);
             Robot.Common.Robot bestEnemyToAttack = CheckForViableTarget(movingRobot, robots);
-            if (bestStation == null)
-            {   
-                if (bestEnemyToAttack != null)
-                {
-                    return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
-                }
-            }
 
-            Move move = FindOptimalMove(movingRobot, bestStation);
-            if (move != null && bestEnemyToAttack != null)
-            {
-                if (move.potentialReward > ((bestEnemyToAttack.Energy * 0.05) - MoveCost(movingRobot.Position, bestEnemyToAttack.Position)))
-                {
-                    if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius))
-                    {
-                        return new CollectEnergyCommand();
-                    }
-                    return new MoveCommand() { NewPosition = MoveByStepLenght(movingRobot, bestStation, move.stepLenght) };
-                }
-                else
-                {
-                    return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
-                }
-            }else if (move != null)
-            {
-                if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius))
-                {
-                    return new CollectEnergyCommand();
-                }
-                return new MoveCommand() { NewPosition = MoveByStepLenght(movingRobot, bestStation, move.stepLenght) };
-            }
-            else if (bestEnemyToAttack != null)
+            if (bestStation == null && bestEnemyToAttack != null)
             {
                 return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
             }
-            
-            return new MoveCommand() { NewPosition = MoveByStepLenght(movingRobot, FindNearestFreeStation(movingRobot, map, robots), 1) };
 
+            if (bestStation != null)
+            {
+                Move move = FindOptimalMove(movingRobot, bestStation);
+
+                if (move != null)
+                {
+                    if (ShouldCollectEnergy(movingRobot, bestStation))
+                    {
+                        return new CollectEnergyCommand();
+                    }
+
+                    if (bestEnemyToAttack != null && IsAttackMoreProfitable(move, bestEnemyToAttack, movingRobot))
+                    {
+                        return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
+                    }
+
+                    return new MoveCommand() { NewPosition = MoveByStepLength(movingRobot, bestStation, move.stepLength) };
+                }
+            }
+
+            if (bestEnemyToAttack != null)
+            {
+                return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
+            }
+
+            return new MoveCommand() { NewPosition = MoveTowardsNearestFreeStation(movingRobot, map, robots) };
         }
 
-        public void updateRobots(Robot.Common.Robot robot)
+        private bool ShouldCreateNewRobot(Robot.Common.Robot robot, IList<Robot.Common.Robot> robots, Map map)
+        {
+            return robot.Energy > 700 && RoundCount < 35;
+        }
+
+        private bool ShouldCollectEnergy(Robot.Common.Robot robot, EnergyStation station)
+        {
+            return DistanceHelper.GetDistance(robot.Position, station.Position) <= CollectRadius;
+        }
+
+        private bool IsAttackMoreProfitable(Move move, Robot.Common.Robot enemy, Robot.Common.Robot attacker)
+        {
+            return move.potentialReward > (enemy.Energy * 0.05 - MoveCost(attacker.Position, enemy.Position));
+        }
+
+        private Position MoveTowardsNearestFreeStation(Robot.Common.Robot robot, Map map, IList<Robot.Common.Robot> robots)
+        {
+            EnergyStation nearestFreeStation = FindNearestFreeStation(robot, map, robots);
+            return MoveByStepLength(robot, nearestFreeStation, 1);
+        }
+
+        public void UpdateRobots(Robot.Common.Robot robot)
         {
             foreach (var r in myRobots)
             {

@@ -143,11 +143,11 @@ namespace MisaroshIvan.RobotChallange
             return currentCost;
         }
 
-        public Position CheckForViableTarget(Robot.Common.Robot movingRobot, IList<Robot.Common.Robot> robots)
+        public Robot.Common.Robot CheckForViableTarget(Robot.Common.Robot movingRobot, IList<Robot.Common.Robot> robots)
         {
             robots = robots.Where(r => MoveCost(movingRobot.Position, r.Position) <= movingRobot.Energy).ToList();
             int currentReward = 0;
-            Position target = null;
+            Robot.Common.Robot target = null;
             foreach (var robot in robots)
             {
                 if (robot != movingRobot && !IsMyRobot(robot))
@@ -163,7 +163,7 @@ namespace MisaroshIvan.RobotChallange
                     if (currentReward < newReward)
                     {
                         currentReward = newReward;
-                        target = robot.Position;
+                        target = robot;
                     }
                 }
             }
@@ -225,6 +225,7 @@ namespace MisaroshIvan.RobotChallange
             int currentSteps = 1;
             int currentCost = MoveCost(movingRobot.Position, station.Position);
             int currenStepLenght = DistanceHelper.GetStepLength(movingRobot.Position, station.Position, currentSteps);
+            int currentReward = station.Energy - currentCost;
             float optimalRewardImprovement = 1.5f;
 
             while (currentSteps <= maxSteps)
@@ -236,20 +237,21 @@ namespace MisaroshIvan.RobotChallange
                     currentSteps++;
                     continue;
                 }
-                if ((newCost / currentCost) >= optimalRewardImprovement)
+                int newReward = station.Energy - newCost;
+                if ((newReward / currentReward) >= optimalRewardImprovement)
                 {
                     currentCost = newCost;
                     currenStepLenght = newStepLenght;
+                    currentReward = newReward;
                 }
                 currentSteps++;
             }
-            return new Move(currentCost, currenStepLenght);
+            return new Move(currentCost, currenStepLenght, currentReward);
         }
 
         public EnergyStation FindBestStation(IList<Robot.Common.Robot> robots, Robot.Common.Robot movingRobot, Map map)
         {
             IList<EnergyStation> stations = map.Stations.Where(station => MoveCostS(movingRobot, station) <= movingRobot.Energy).ToList();
-            //IList<EnergyStation> stations = map.Stations.Where(station => MoveCost(movingRobot.Position, station.Position) <= movingRobot.Energy).ToList();
             int currentReward = 0;
             EnergyStation target = null;
             foreach (var station in stations)
@@ -285,47 +287,46 @@ namespace MisaroshIvan.RobotChallange
                 return new CreateNewRobotCommand();
             }
 
-            Position newPos = null;
             EnergyStation bestStation = FindBestStation(robots, movingRobot, map);
+            Robot.Common.Robot bestEnemyToAttack = CheckForViableTarget(movingRobot, robots);
             if (bestStation == null)
-            {
-                return new MoveCommand() { NewPosition = movingRobot.Position };
-            }
-
-            if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius))
-            {
-                return new CollectEnergyCommand();
-            }
-
-            if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius && bestStation.Energy < 30))
-            {
-                newPos = CheckForViableTarget(movingRobot, robots);
-                if (newPos != null)
+            {   
+                if (bestEnemyToAttack != null)
                 {
-                    return new MoveCommand() { NewPosition = newPos };
+                    return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
                 }
-                //TODO: подумати як обрати іншу станцію
-
             }
 
             Move move = FindOptimalMove(movingRobot, bestStation);
-            //TODO: подумати як обрати іншу станцію
-
-            // TODO: find optimal distance to move
-            if (move.moveCost > movingRobot.Energy)
+            if (move != null && bestEnemyToAttack != null)
             {
-                //return MoveByStepLenght(movingRobot, bestStation, GetAcceptableStepLenght(movingRobot, bestStation));
+                if (move.potentialReward > ((bestEnemyToAttack.Energy * 0.05) - MoveCost(movingRobot.Position, bestEnemyToAttack.Position)))
+                {
+                    if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius))
+                    {
+                        return new CollectEnergyCommand();
+                    }
+                    return new MoveCommand() { NewPosition = MoveByStepLenght(movingRobot, bestStation, move.stepLenght) };
+                }
+                else
+                {
+                    return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
+                }
+            }else if (move != null)
+            {
+                if ((DistanceHelper.GetDistance(movingRobot.Position, bestStation.Position) <= CollectRadius))
+                {
+                    return new CollectEnergyCommand();
+                }
                 return new MoveCommand() { NewPosition = MoveByStepLenght(movingRobot, bestStation, move.stepLenght) };
             }
-
-            if (move.moveCost < movingRobot.Energy)
+            else if (bestEnemyToAttack != null)
             {
-                return new MoveCommand() { NewPosition = bestStation.Position };
+                return new MoveCommand() { NewPosition = bestEnemyToAttack.Position };
             }
-
-
-            return new MoveCommand() { NewPosition = newPos};
             
+            return new MoveCommand() { NewPosition = MoveByStepLenght(movingRobot, FindNearestFreeStation(movingRobot, map, robots), 1) };
+
         }
 
         public void updateRobots(Robot.Common.Robot robot)

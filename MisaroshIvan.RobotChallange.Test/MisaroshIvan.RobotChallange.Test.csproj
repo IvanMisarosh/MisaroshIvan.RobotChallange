@@ -52,8 +52,14 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="FindNearestFreeCellInRadius.cs" />
+    <Compile Include="TestCheckForViableTarget.cs" />
     <Compile Include="TestDistanceHelper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TestFindBestStation.cs" />
+    <Compile Include="TestFindClosestPosIfTaken.cs" />
+    <Compile Include="TestFindClosestStationToTake.cs" />
+    <Compile Include="TestFindEnergyStationsInRadius.cs" />
     <Compile Include="TestGetAcceptableStepLenght.cs" />
     <Compile Include="TestMoveByStepLength.cs" />
   </ItemGroup>

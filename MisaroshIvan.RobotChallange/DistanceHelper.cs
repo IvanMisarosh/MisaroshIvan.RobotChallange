@@ -16,10 +16,8 @@ namespace MisaroshIvan.RobotChallange
 
         public static int GetStepLength(Position a, Position b, int steps)
         {
-            // Calculate the Manhattan distance
             int distance = Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 
-            // Calculate the step length needed
             int stepLength = distance / steps;
 
             return stepLength;

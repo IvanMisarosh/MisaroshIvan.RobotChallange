@@ -29,24 +29,6 @@ namespace MisaroshIvan.RobotChallange
 
         public string Description => throw new NotImplementedException();
 
-        public EnergyStation FindNearestFreeStation(Robot.Common.Robot movingRobot, Map map, IList<Robot.Common.Robot> robots)
-        {
-            EnergyStation nearest = null;
-            int minDistance = int.MaxValue;
-            foreach (var station in map.Stations)
-            {
-                if (IsStationFree(station, movingRobot, robots))
-                {
-                    int d = DistanceHelper.GetDistance(station.Position, movingRobot.Position);
-                    if (d < minDistance)
-                    {
-                        minDistance = d;
-                        nearest = station;
-                    }
-                }
-            }
-            return nearest == null ? null : nearest;
-        }
         public bool IsStationFree(EnergyStation station, Robot.Common.Robot movingRobot,
         IList<Robot.Common.Robot> robots)
         {
@@ -239,24 +221,6 @@ namespace MisaroshIvan.RobotChallange
                     }
 
                 }
-                else
-                {
-                    var stations = FindEnergyStationsInRadius(movingRobot, map);
-                    int dist = int.MaxValue;
-                    foreach (var s in stations)
-                    {
-                        if (IsCellFree(s.Position, movingRobot, robots) && s != station)
-                        {
-                            int d = DistanceHelper.GetDistance(s.Position, movingRobot.Position);
-                            if (d < dist)
-                            {
-                                dist = d;
-                                bestStation = s;
-                            }
-                        }
-
-                    }
-                }
             }
             return bestStation;
         }
@@ -363,7 +327,7 @@ namespace MisaroshIvan.RobotChallange
             return nearest;
         }
 
-        private EnergyStation FindClosestStationToTake(Robot.Common.Robot robot, Map map)
+        public EnergyStation FindClosestStationToTake(Robot.Common.Robot robot, Map map)
         {
             EnergyStation closestStation = null;
             int minDistance = int.MaxValue;
@@ -381,7 +345,8 @@ namespace MisaroshIvan.RobotChallange
 
         private bool ShouldCreateNewRobot(Robot.Common.Robot robot, IList<Robot.Common.Robot> robots, Map map)
         {
-            return robot.Energy > 300 && RoundCount < 30;
+            return robot.Energy > 300 && robots.Count < map.Stations.Count * 2 && RoundCount < 30;
+            //return robot.Energy > 300 && RoundCount < 30;
         }
 
     }
